@@ -79,6 +79,16 @@ data/                   # 运行数据，已被 git 忽略
 | 只提交日报工时 | `./scripts/submit_daily.sh --date YYYY-MM-DD` |
 | 只采集 Agent 会话 | `./scripts/collect_agents.sh --date YYYY-MM-DD` |
 | Jira 登录状态 | `./scripts/jira_login.sh --status` |
+| 定时任务状态 | `./scripts/install_schedule.sh --status` |
+| 安装/卸载定时 | `./scripts/install_schedule.sh` / `--uninstall` |
+
+## 定时任务
+
+- 已安装 launchd，默认每天 21:00 跑当天流程并自动提交 Jira；
+- 不要随意执行 `./scripts/install_schedule.sh --run-now`：它会立即触发并提交 Jira，只有用户明确要求时才能用；
+- 手动测试但不提交：`SCHEDULED_NO_SUBMIT=1 ./scripts/run_scheduled.sh`；
+- 失败会写 `data/logs/last-failure.txt`、发 macOS 通知，并可选 POST 到 `[notify].webhook_url`；
+- 日志在 `data/logs/`，属于 `data/`，不提交。
 
 ## 输出位置
 

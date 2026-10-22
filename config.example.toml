@@ -17,3 +17,11 @@ label = "YourMainLabel"
 #
 # [agents]
 # output_dir = "data/AI总结"
+#
+# [schedule]
+# hour = 21
+# minute = 0
+#
+# [notify]
+# macos_notification = true
+# webhook_url = ""

@@ -24,6 +24,9 @@
 │   ├── jira_auth.py
 │   ├── jira_login.py/.sh
 │   ├── run_daily.sh
+│   ├── run_scheduled.sh
+│   ├── install_schedule.py/.sh
+│   ├── notify_failure.py
 │   ├── run_python.sh
 │   ├── today.py
 │   ├── check_setup.py/.sh
@@ -210,3 +213,28 @@ AI 命令由 `config.toml` 的 `claude.bin`、`claude.settings` 和可选的 `cl
 它解析 `data/日报/YYYY-MM-DD-日报.md` 中每个 Jira 主任务的 `- 工时：` 行，对有效工时逐条调用 Jira REST API 写入 worklog，正文作为工时备注。工时记录在 `data/日报/YYYY-MM-DD-提交.json`；重跑时已提交的工单自动跳过。
 
 `未记录` 的任务不提交。网络异常等导致结果无法确认时记为 `unconfirmed`，重跑不会自动重试；请先到 Jira 核对，确认未写入后再加 `--retry-unconfirmed`。`--dry-run` 输出日报并列出将提交的工单，但不写日报、不写提交记录、不提交；`--no-submit` 只生成日报。
+
+## 定时任务（macOS launchd）
+
+安装后默认每天 **21:00** 运行当天流程，并自动提交 Jira：
+
+```bash
+./scripts/install_schedule.sh              # 每天 21:00
+./scripts/install_schedule.sh --hour 21 --minute 0
+./scripts/install_schedule.sh --status
+./scripts/install_schedule.sh --uninstall
+```
+
+- LaunchAgent：`~/Library/LaunchAgents/com.<user>.polars-daily-log.plist`
+- 执行入口：`scripts/run_scheduled.sh`
+- 日志：`data/logs/YYYY-MM-DD.log`、`launchd.out.log`、`launchd.err.log`
+- 失败时：
+  - 写 `data/logs/last-failure.txt`；
+  - 发 macOS 通知；
+  - 可选 POST 到 `[notify].webhook_url`，JSON 为 `{"text": "..."}`。
+- 想手动测试但不提交：
+  ```bash
+  SCHEDULED_NO_SUBMIT=1 ./scripts/run_scheduled.sh
+  ```
+- `--run-now` 会通过 launchd 立即触发一次（会按配置自动提交 Jira），仅在明确需要时使用。
+- 如果 21:00 时 Mac 处于睡眠，launchd 会在唤醒后补跑一次。

@@ -57,6 +57,14 @@ DEFAULTS = {
         'state_file_name': '{date}-提交.json',
         'max_seconds_per_task': 86400,
     },
+    'schedule': {
+        'hour': 21,
+        'minute': 0,
+    },
+    'notify': {
+        'macos_notification': True,
+        'webhook_url': '',
+    },
     'agents': {
         'output_dir': 'data/AI总结',
         'file_name': '{date}-Agent.md',
