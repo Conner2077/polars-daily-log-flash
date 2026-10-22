@@ -1,9 +1,13 @@
 # 每日总结
 
+> Agent 使用说明见 [AGENTS.md](AGENTS.md)；Claude Code 会自动加载 [CLAUDE.md](CLAUDE.md)。
+
 ## 目录结构
 
 ```text
 每日总结/
+├── AGENTS.md            # 给 Agent 的使用说明
+├── CLAUDE.md            # Claude Code 加载 AGENTS.md
 ├── config.toml          # 最小配置
 ├── config.example.toml
 ├── requirements.txt
@@ -67,6 +71,9 @@ Jira 项目固定为 `PLS`，工单号模式固定为 `PLS-\d+`，不需要配�
 凭据保存在 `data/jira_auth.json`（0600），不进入 git。
 
 ```bash
+# 只检查是否已登录，不修改凭据、不等待输入
+./scripts/jira_login.sh --status
+
 # 从旧 pdl 配置导入一次（可选）
 ./scripts/jira_login.sh --from-pdl ~/.auto_daily_log/data.db --test
 
@@ -78,6 +85,8 @@ Jira 项目固定为 `PLS`，工单号模式固定为 `PLS-\d+`，不需要配�
 ./scripts/jira_login.sh --server-url https://work.example.com \
   --auth-mode cookie --cookie "..." --test
 ```
+
+`jira_login.sh` 本身不是自动登录：不带参数时会交互式询问地址和凭据；带 `--from-pdl` 或显式参数时非交互。`./bootstrap.sh` 会自动检测旧 pdl 配置并询问/导入。
 
 也支持环境变量 `JIRA_SERVER_URL`、`JIRA_USERNAME`、`JIRA_PAT`、`JIRA_COOKIE`、`JIRA_AUTH_MODE` 临时覆盖。
 

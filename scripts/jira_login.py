@@ -59,10 +59,28 @@ def main():
     parser.add_argument('--cookie')
     parser.add_argument('--from-pdl', metavar='DATA_DB',
                         help='从 pdl 的 data.db 读取现有登录配置')
-    parser.add_argument('--test', action='store_true', help='保存后调用 /myself 验证')
+    parser.add_argument('--status', action='store_true',
+                        help='只检查是否已登录，不修改凭据、不提示输入')
+    parser.add_argument('--test', action='store_true', help='保存或检查后调用 /myself 验证')
     args = parser.parse_args()
 
     try:
+        if args.status:
+            try:
+                data = load_credentials()
+            except JiraAuthError as exc:
+                print(f'未登录：{exc}', file=sys.stderr)
+                return 1
+            print(f"Jira: {data['server_url']} | auth={data['auth_mode']} | "
+                  f"user={data['username'] or '-'}")
+            if args.test:
+                user = asyncio.run(JiraClient(data).get_myself())
+                if user is None:
+                    print('连接验证失败：请检查地址和凭据', file=sys.stderr)
+                    return 1
+                print('连接验证成功：', user.get('displayName') or user.get('name') or user.get('key'))
+            return 0
+
         if args.from_pdl:
             data = from_pdl(args.from_pdl)
         else:

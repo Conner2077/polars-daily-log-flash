@@ -87,14 +87,17 @@ if (( ! SKIP_SETUP )); then
 fi
 
 if (( ! SKIP_LOGIN )); then
-    credentials="$ROOT/data/jira_auth.json"
+    credentials_ok=0
+    if "$TASK_ROOT/jira_login.sh" --status >/dev/null 2>&1; then
+        credentials_ok=1
+    fi
     has_override=0
     [[ -n "$FROM_PDL" || ${#JIRA_ARGS[@]} -gt 0 ]] && has_override=1
 
-    if [[ -f "$credentials" && $has_override -eq 0 ]]; then
-        echo "Jira 凭据已存在：$credentials"
+    if (( credentials_ok && !has_override )); then
+        "$TASK_ROOT/jira_login.sh" --status
         if (( TEST_JIRA )); then
-            "$TASK_ROOT/jira_login.sh" --test || true
+            "$TASK_ROOT/jira_login.sh" --status --test || true
         fi
     else
         login_args=()
