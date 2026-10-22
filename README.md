@@ -6,6 +6,8 @@
 每日总结/
 ├── config.toml          # 最小配置
 ├── config.example.toml
+├── requirements.txt
+├── setup.sh             # 创建 .venv 并安装依赖
 ├── prompts/             # 提示词
 │   ├── daily_report.md
 │   └── agent_summary.md
@@ -14,8 +16,11 @@
 │   ├── update_tasks.py/.sh
 │   ├── generate_daily.py/.sh
 │   ├── submit_daily.py/.sh
+│   ├── jira_auth.py
+│   ├── jira_login.py/.sh
 │   ├── run_daily.sh
 │   ├── run_python.sh
+│   ├── today.py
 │   ├── check_setup.py/.sh
 │   └── project_config.py
 ├── tools/wechat-macos/  # 可选：企业微信 macOS 辅助脚本
@@ -31,12 +36,9 @@
 
 ## 配置文件
 
-根目录 `config.toml` 只保留每台机器必须改的三段：
+根目录 `config.toml` 只保留两项：
 
 ```toml
-[paths]
-pdl_root = "~/path/to/auto_daily_log"
-
 [claude]
 settings = "~/path/to/ds.json"
 
@@ -48,24 +50,45 @@ Jira 项目固定为 `PLS`，工单号模式固定为 `PLS-\d+`，不需要配�
 
 其余默认值在 `scripts/project_config.py` 的 `DEFAULTS`：
 
-- `paths.pdl_python` 默认 `/pdl_root/.venv/bin/python`，`pdl_log` 默认 `~/.local/bin/pdl-log`，`pdl_server_config` 默认 `~/.polars-daily-log/config.yaml`
+- `jira.credentials` 默认 `data/jira_auth.json`
 - `report`：来源根目录、日报命名、200 字正文上限、8 小时规则
 - `agents`：Claude Code / Codex 目录、截断上限
-- `submit`：提交记录、超时、单任务工时上限
+- `submit`：提交记录、单任务工时上限
 
 需要时可以在 `config.toml` 覆盖任意默认值，示例见 `config.example.toml`。
 
 提示词在 `prompts/daily_report.md` 和 `prompts/agent_summary.md`，使用 `{DAY}`、`{KEYS}`、`{MAX_CHARS}`、`{DATA}` 占位。改措辞或字数要求直接改文件，不用动代码；也可在 `config.toml` 的 `[prompts]` 覆盖文件路径。
 
-Shell 入口统一经 `scripts/run_python.sh` 读取 `paths.pdl_python` 与 `paths.pdl_root`；`PDL_SERVER_CONFIG` 仍可用环境变量覆盖默认值。
+`scripts/run_python.sh` 优先使用项目内 `.venv/bin/python`，没有时回退到系统 `python3`；不再依赖 pdl 环境或 `PYTHONPATH`。
+
+## Jira 登录
+
+凭据保存在 `data/jira_auth.json`（0600），不进入 git。
+
+```bash
+# 从旧 pdl 配置导入一次（可选）
+./scripts/jira_login.sh --from-pdl ~/.auto_daily_log/data.db --test
+
+# 或直接填写 PAT
+./scripts/jira_login.sh --server-url https://work.example.com \
+  --auth-mode pat --username your-name --pat "xxxx" --test
+
+# Cookie 模式
+./scripts/jira_login.sh --server-url https://work.example.com \
+  --auth-mode cookie --cookie "..." --test
+```
+
+也支持环境变量 `JIRA_SERVER_URL`、`JIRA_USERNAME`、`JIRA_PAT`、`JIRA_COOKIE`、`JIRA_AUTH_MODE` 临时覆盖。
 
 ## 他人部署
 
-1. 准备 Python 3.11+（`tomllib`）、`auto_daily_log`（提供 `pdl-log` 和 Jira 客户端）以及 Claude Code。
-2. `cp config.example.toml config.toml`，修改 `paths.pdl_root`、`claude.settings`、`jira.label`。
-3. 确认 `scripts/*.sh` 有执行权限，运行 `./scripts/check_setup.sh`。
-4. 用 `./scripts/update_tasks.sh --dry-run` 验证 Jira 登录和查询。
-5. 先跑 `./scripts/run_daily.sh --no-submit`，确认日报后再去掉 `--no-submit`。
+1. 准备 Python 3.11+ 和 Claude Code。
+2. 运行 `./setup.sh` 创建 `.venv` 并安装 `httpx`。
+3. `cp config.example.toml config.toml`，修改 `claude.settings` 和 `jira.label`。
+4. `./scripts/jira_login.sh` 配置 Jira 地址和凭据。
+5. 运行 `./scripts/check_setup.sh`。
+6. 用 `./scripts/update_tasks.sh --dry-run` 验证 Jira 查询。
+7. 先跑 `./scripts/run_daily.sh --no-submit`，确认日报后再去掉 `--no-submit`。
 
 `wechat/` 是可选的企业微信工具（本地保留，不纳入仓库）；`tools/wechat-macos/` 记录了 macOS 密钥提取尝试，当前环境被 hardened runtime/SIP 阻塞，不影响主流程。
 
@@ -74,14 +97,18 @@ Shell 入口统一经 `scripts/run_python.sh` 读取 `paths.pdl_python` 与 `pat
 仓库不提交以下内容：
 
 - `data/`：个人工作记录、日报、提交记录、`当前任务.md`；
-- `config.toml`：本机路径和 Claude 配置；
+- `config.toml`：Claude 配置和 Jira 标签；
+- `data/jira_auth.json`：Jira 登录凭据（属于 `data/`，已被忽略）；
+- `.venv/`：本地依赖环境；
 - `wechat/` 工具本体（第三方、Linux/Wine 版，本地保留但不提交）；
 - `tools/wechat-macos/` 辅助脚本会提交。
 
 克隆后：
 
 ```bash
+./setup.sh
 cp config.example.toml config.toml
+./scripts/jira_login.sh
 ./scripts/check_setup.sh   # 会自动创建 data/
 ```
 
@@ -108,7 +135,7 @@ cp config.example.toml config.toml
 
 从 Jira 查询 `jira.jql`，项目固定为 `PLS`，`{label}` 替换为 `jira.label`（默认 `ConnerMain`），分页读取全部匹配工单，生成 `data/当前任务.md`。描述以引用块写入，避免任务描述里的标题或 `## PLS-xxx` 行被日报脚本误认为文档结构。保留状态与父任务关系，不额外按经办人或完成状态过滤。该步骤不调用 Claude；日报生成时再由 Claude 将任务要求与当天实际记录结合。
 
-复用 `config.toml` 中 `paths` 指定的 pdl Python 环境和 Jira 客户端。默认服务配置与本机 `pdl-log` 一致，使用 `~/.polars-daily-log/config.yaml`；支持 `PDL_SERVER_CONFIG` 环境变量或 `--db /路径/data.db` 覆盖。数据库只读，查询完成后原子替换文档，失败时保留上一版。同步结果为空时明确写入“没有匹配标签的任务”。
+使用项目自带的 `scripts/jira_auth.py` 读取 `data/jira_auth.json`（或环境变量）直接查询 Jira，不再依赖 pdl 环境。查询完成后原子替换文档，失败时保留上一版。同步结果为空时明确写入“没有匹配标签的任务”。
 
 ## 日报与工时约定
 
@@ -116,7 +143,7 @@ cp config.example.toml config.toml
 2. 读取 `data/` 各来源文件夹中指定日期的 Markdown 工作记录，结合任务描述，由 Claude 生成按项目归档的当天日志。任务目标不能当成完成事实；同一工作在多个来源出现时应合并。
 3. 每个 Jira 主任务正文不超过 `report.max_body_chars`（默认 200 字），只保留最重要的 2–3 项结果，不写长清单。
 4. 有明确工时记录时按 Jira 主任务归属汇总，同一段工作不重复计时；当天没有工时记录时，总时间默认 8 小时，按 Jira 主任务平均分配，不按来源文件夹分配。
-5. 使用 `pdl-log` 携带明确的工单、日期和分配后的工时提交，并保留提交结果。
+5. 使用项目自带的 Jira 客户端按工单、日期和分配后的工时提交，并保留提交结果。
 
 ## 生成日报
 
@@ -154,6 +181,6 @@ AI 命令由 `config.toml` 的 `claude.bin`、`claude.settings` 和可选的 `cl
 ./scripts/submit_daily.sh --date 2026-10-22 --retry-unconfirmed
 ```
 
-它解析 `data/日报/YYYY-MM-DD-日报.md` 中每个 Jira 主任务的 `- 工时：` 行，对有效工时逐条调用 `pdl-log -i PLS-xxx -H 小时 -d 日期`，正文经标准输入传入。工时记录在 `data/日报/YYYY-MM-DD-提交.json`；重跑时已提交的工单自动跳过。同时只读检查 pdl-log 的 `manual-worklogs.jsonl`，手工提交过的工单也会跳过。
+它解析 `data/日报/YYYY-MM-DD-日报.md` 中每个 Jira 主任务的 `- 工时：` 行，对有效工时逐条调用 Jira REST API 写入 worklog，正文作为工时备注。工时记录在 `data/日报/YYYY-MM-DD-提交.json`；重跑时已提交的工单自动跳过。
 
 `未记录` 的任务不提交。网络异常等导致结果无法确认时记为 `unconfirmed`，重跑不会自动重试；请先到 Jira 核对，确认未写入后再加 `--retry-unconfirmed`。`--dry-run` 输出日报并列出将提交的工单，但不写日报、不写提交记录、不提交；`--no-submit` 只生成日报。

@@ -1,33 +1,18 @@
-"""Submit the hours recorded in a generated daily report through pdl-log."""
+"""Submit the hours recorded in a generated daily report directly to Jira."""
 from __future__ import annotations
 
 import argparse
+import asyncio
 import json
 import re
-import shutil
-import subprocess
 import sys
 from datetime import date
 from pathlib import Path
 
+import httpx
+
+import jira_auth
 from project_config import CFG, now_local, project_path, today_iso, write_atomic
-
-
-def pdl_log_path():
-    configured = project_path(CFG['paths']['pdl_log'])
-    if configured.is_file():
-        return configured
-    found = shutil.which('pdl-log')
-    if found:
-        return Path(found)
-    raise ValueError('找不到 pdl-log；请检查 config.toml 的 paths.pdl_log 或安装 CLI')
-
-
-def history_path():
-    # Same database pdl-log resolves; the manual history sits next to it.
-    from auto_daily_log.config import resolve_db_path
-
-    return resolve_db_path().with_name('manual-worklogs.jsonl')
 
 
 def parse_report(path):
@@ -70,28 +55,7 @@ def write_state(path, day, report, submissions):
     write_atomic(path, content)
 
 
-def history_record(key, day, history):
-    # "unconfirmed" also blocks: pdl-log could not tell whether Jira received the POST.
-    if not history.is_file():
-        return None
-    for line in reversed(history.read_text(encoding='utf-8').splitlines()):
-        try:
-            record = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if (record.get('issue_key') == key and record.get('date') == day
-                and record.get('status') in ('submitted', 'unconfirmed')):
-            return record
-    return None
-
-
-def submit(key, seconds, body, day, executable):
-    command = [str(executable), '-i', key, '-H', f'{seconds / 3600:.6f}', '-d', day]
-    timeout = CFG['submit']['pdl_log_timeout_seconds']
-    return subprocess.run(command, input=body, text=True, capture_output=True, timeout=timeout)
-
-
-def run(args):
+async def run(args):
     day = date.fromisoformat(args.date).isoformat()
     output_dir = project_path(CFG['report']['output_dir'])
     report = (Path(args.report).expanduser() if args.report
@@ -99,12 +63,12 @@ def run(args):
     if not report.is_file():
         raise ValueError(f'找不到日报：{report}，请先运行 generate_daily.sh')
     tasks = parse_report(report)
-    executable = pdl_log_path()
-    history = history_path()
     state_path = output_dir / CFG['submit']['state_file_name'].format(date=day)
     state = load_state(state_path)
     submissions = state['submissions']
     failures = 0
+    client = None
+    started = f"{day}T09:00:00.000{now_local().strftime('%z')}"
 
     for task in tasks:
         key, seconds, body = task['key'], task['seconds'], task['body']
@@ -121,21 +85,9 @@ def run(args):
             print(f"跳过 {key}：已提交过（Jira ID {previous.get('worklog_id') or '未知'}）")
             continue
         if previous and previous.get('status') == 'unconfirmed' and not args.retry_unconfirmed:
-            print(f'跳过 {key}：上次提交结果未确认，请先到 Jira 核对；确认未写入后可加 --retry-unconfirmed', file=sys.stderr)
-            failures += 1
-            continue
-        found = history_record(key, day, history)
-        if found and found.get('status') == 'unconfirmed' and not args.retry_unconfirmed:
-            print(f'跳过 {key}：pdl-log 历史显示上次提交结果未确认，请先到 Jira 核对；确认未写入后可加 --retry-unconfirmed',
+            print(f'跳过 {key}：上次提交结果未确认，请先到 Jira 核对；确认未写入后可加 --retry-unconfirmed',
                   file=sys.stderr)
             failures += 1
-            continue
-        if found and found.get('status') == 'submitted':
-            submissions[key] = {'seconds': found.get('time_spent_sec'), 'status': 'submitted',
-                                'worklog_id': found.get('jira_worklog_id'), 'source': 'pdl-log 历史'}
-            if not args.dry_run:
-                write_state(state_path, day, report, submissions)
-            print(f"跳过 {key}：pdl-log 历史显示已提交（Jira ID {found.get('jira_worklog_id') or '未知'}）")
             continue
 
         hours = f'{seconds / 3600:.6f}'.rstrip('0').rstrip('.')
@@ -145,21 +97,26 @@ def run(args):
             print(f'[dry-run] 将提交 {key} · {hours} 小时 · {preview[:120]}')
             continue
 
-        completed = submit(key, seconds, body, day, executable)
+        if client is None:
+            client = jira_auth.build_client(args.credentials)
         now = now_local().isoformat(timespec='seconds')
-        if completed.returncode == 0:
-            match = re.search(r'Jira ID (\S+)', completed.stdout)
-            worklog_id = match.group(1) if match else None
+        try:
+            result = await client.submit_worklog(key, seconds, body, started)
+        except httpx.RequestError as exc:
+            submissions[key] = {'seconds': seconds, 'status': 'unconfirmed',
+                                'error': str(exc)[-2000:], 'attempted_at': now}
+            failures += 1
+            print(f'结果未确认 {key}：{exc}', file=sys.stderr)
+        except Exception as exc:
+            submissions[key] = {'seconds': seconds, 'status': 'failed',
+                                'error': str(exc)[-2000:], 'attempted_at': now}
+            failures += 1
+            print(f'提交失败 {key}：{exc}', file=sys.stderr)
+        else:
+            worklog_id = str(result.get('id') or '') or None
             submissions[key] = {'seconds': seconds, 'status': 'submitted',
                                 'worklog_id': worklog_id, 'submitted_at': now}
             print(f'已提交 {key} · {hours} 小时 · Jira ID {worklog_id or "未知"}')
-        else:
-            unconfirmed = '提交未确认' in completed.stderr
-            submissions[key] = {'seconds': seconds, 'status': 'unconfirmed' if unconfirmed else 'failed',
-                                'error': completed.stderr.strip()[-2000:], 'attempted_at': now}
-            failures += 1
-            label = '结果未确认' if unconfirmed else '提交失败'
-            print(f'{label} {key}：{completed.stderr.strip()}', file=sys.stderr)
         write_state(state_path, day, report, submissions)
 
     if args.dry_run:
@@ -172,15 +129,16 @@ def run(args):
 
 
 def main():
-    parser = argparse.ArgumentParser(description='把日报中的工时通过 pdl-log 提交到 Jira')
+    parser = argparse.ArgumentParser(description='把日报中的工时直接提交到 Jira')
     parser.add_argument('--date', default=today_iso())
     parser.add_argument('--report', help='日报路径；默认按 config.toml 的 report 配置')
+    parser.add_argument('--credentials', help='Jira 凭据文件；默认 data/jira_auth.json')
     parser.add_argument('--dry-run', action='store_true', help='只预览将提交的内容')
     parser.add_argument('--retry-unconfirmed', action='store_true',
                         help='重试上次结果未确认的工单（请先到 Jira 核对，避免重复）')
     args = parser.parse_args()
     try:
-        return run(args)
+        return asyncio.run(run(args))
     except (Exception, KeyboardInterrupt) as exc:
         print(f'提交失败：{exc}', file=sys.stderr)
         return 1

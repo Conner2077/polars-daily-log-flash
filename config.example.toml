@@ -1,11 +1,5 @@
-# 复制为 config.toml 后只需改这三段。
-# 其余配置项都有默认值，一般不用改。
-
-[paths]
-pdl_root = "~/path/to/auto_daily_log"
-# pdl_python = "~/path/to/auto_daily_log/.venv/bin/python"
-# pdl_log = "~/.local/bin/pdl-log"
-# pdl_server_config = "~/.polars-daily-log/config.yaml"
+# 复制为 config.toml 后只需要改这两段。
+# Jira 项目固定为 PLS，工单号模式固定为 PLS-\d+，无需配置。
 
 [claude]
 settings = "~/path/to/cc_config/ds.json"
@@ -13,15 +7,13 @@ settings = "~/path/to/cc_config/ds.json"
 # timeout_seconds = 600
 
 [jira]
-# Jira 项目固定为 PLS，工单号模式固定为 PLS-\d+，无需配置
 label = "YourMainLabel"
+# 默认凭据文件：data/jira_auth.json（由 ./scripts/jira_login.sh 生成）
+# credentials = "data/jira_auth.json"
 
-# 可选覆盖示例（都是新增的表，不会和上面重复）：
+# 可选覆盖示例：
 # [report]
 # max_body_chars = 200
-#
-# [submit]
-# pdl_log_timeout_seconds = 120
 #
 # [agents]
 # output_dir = "data/AI总结"

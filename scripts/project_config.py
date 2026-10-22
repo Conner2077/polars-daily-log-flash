@@ -21,12 +21,6 @@ CONFIG_PATH = Path(os.environ.get('DAILY_SUMMARY_CONFIG', ROOT / 'config.toml'))
 
 DEFAULTS = {
     'timezone': 'Asia/Shanghai',
-    'paths': {
-        'pdl_root': '',
-        'pdl_python': '',
-        'pdl_server_config': '~/.polars-daily-log/config.yaml',
-        'pdl_log': '~/.local/bin/pdl-log',
-    },
     'claude': {
         'bin': 'claude',
         'settings': '',
@@ -46,6 +40,7 @@ DEFAULTS = {
         'fields': 'summary,description,status,updated,issuetype,parent,labels',
         'key_pattern': r'PLS-\d+',
         'output': 'data/当前任务.md',
+        'credentials': 'data/jira_auth.json',
     },
     'report': {
         'sources_root': 'data',
@@ -61,7 +56,6 @@ DEFAULTS = {
     'submit': {
         'state_file_name': '{date}-提交.json',
         'max_seconds_per_task': 86400,
-        'pdl_log_timeout_seconds': 120,
     },
     'agents': {
         'output_dir': 'data/AI总结',
@@ -117,16 +111,6 @@ def load_config(path=CONFIG_PATH):
     if not isinstance(user, dict):
         raise ValueError(f'配置文件格式无效：{path}')
     config = deep_merge(deepcopy(DEFAULTS), user)
-
-    paths = config['paths']
-    pdl_root = os.path.expanduser(os.path.expandvars(str(paths.get('pdl_root') or '').strip()))
-    if not pdl_root:
-        raise ValueError('config.toml 必须设置 paths.pdl_root')
-    paths['pdl_root'] = pdl_root
-    paths['pdl_python'] = os.path.expanduser(os.path.expandvars(str(
-        paths.get('pdl_python') or Path(pdl_root) / '.venv/bin/python')))
-    for key in ('pdl_server_config', 'pdl_log'):
-        paths[key] = os.path.expanduser(os.path.expandvars(str(paths.get(key) or '')))
     ZoneInfo(config['timezone'])
     return config
 

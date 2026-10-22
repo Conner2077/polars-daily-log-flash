@@ -1,10 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 TASK_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd -- "$TASK_ROOT/.." && pwd)"
-/usr/bin/env python3 -c 'import tomllib' 2>/dev/null || {
-    echo "需要 Python 3.11+（tomllib）；请检查 PATH 中的 python3" >&2; exit 1;
-}
 
 DAY=""
 COLLECT=1
@@ -26,7 +22,7 @@ while [[ $# -gt 0 ]]; do
             cat <<'EOF'
 用法：./scripts/run_daily.sh [--date YYYY-MM-DD] [--no-collect] [--no-refresh] [--dry-run] [--no-submit]
 
-默认依次执行：采集 Agent 会话 → 刷新当前任务 → 生成日报 → 通过 pdl-log 提交工时。
+默认依次执行：采集 Agent 会话 → 刷新当前任务 → 生成日报 → 通过 Jira API 提交工时。
   --date          指定日期，默认北京时间今天
   --no-collect    不采集 Claude Code / Codex 会话
   --no-refresh    不查询 Jira，使用已有当前任务.md
@@ -39,15 +35,7 @@ EOF
 done
 
 if [[ -z "$DAY" ]]; then
-    DAY="$(/usr/bin/env python3 - "$PROJECT_ROOT/config.toml" <<'PY'
-import sys, tomllib
-from datetime import datetime
-from zoneinfo import ZoneInfo
-with open(sys.argv[1], 'rb') as stream:
-    config = tomllib.load(stream)
-print(datetime.now(ZoneInfo(config.get('timezone', 'Asia/Shanghai'))).date().isoformat())
-PY
-)"
+    DAY="$("$TASK_ROOT/run_python.sh" today.py)"
 fi
 
 if (( COLLECT )); then

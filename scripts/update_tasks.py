@@ -1,4 +1,4 @@
-"""Read labelled Jira tasks using existing PDL credentials; replace the global Markdown."""
+"""Read labelled Jira tasks using local credentials; replace the global Markdown."""
 from __future__ import annotations
 
 import argparse
@@ -8,28 +8,15 @@ import sys
 import tempfile
 from pathlib import Path
 
-import aiosqlite
 import httpx
 
-from auto_daily_log.config import resolve_db_path
-from auto_daily_log.jira_client.client import build_jira_client_from_db
-
+import jira_auth
 from project_config import CFG, now_local, project_path
 
 
 JIRA = CFG['jira']
 JQL = JIRA['jql'].replace('{project}', JIRA['project']).replace('{label}', JIRA['label'])
 FIELDS = JIRA['fields']
-
-
-class Settings:
-    def __init__(self, connection):
-        self.connection = connection
-
-    async def fetch_one(self, sql):
-        async with self.connection.execute(sql) as cursor:
-            row = await cursor.fetchone()
-            return dict(row) if row is not None else None
 
 
 async def fetch_tasks(client, url, headers):
@@ -107,15 +94,10 @@ def write_atomic(path, content):
 
 
 async def run(args):
-    db_path = resolve_db_path(args.db).resolve()
-    if not db_path.is_file():
-        raise ValueError(f"找不到 Jira 配置数据库：{db_path}；请先在 PDL 设置中登录 Jira")
-    async with aiosqlite.connect(db_path.as_uri() + "?mode=ro", uri=True) as connection:
-        connection.row_factory = aiosqlite.Row
-        jira = await build_jira_client_from_db(Settings(connection))
+    jira = jira_auth.build_client(args.credentials)
     async with httpx.AsyncClient(timeout=30, trust_env=False, follow_redirects=False) as client:
         issues = await fetch_tasks(client, jira._url("/rest/api/2/search"), jira._headers())
-    base_url = jira._config.server_url
+    base_url = jira.server_url
     content = render_tasks(issues, base_url, now_local().isoformat(timespec="seconds"))
     if args.dry_run:
         print(content, end="")
@@ -128,7 +110,7 @@ async def run(args):
 def main():
     parser = argparse.ArgumentParser(
         description=f"同步 {JIRA['project']} 中带 {JIRA['label']} 标签的任务到全局当前任务.md")
-    parser.add_argument("--db", help="PDL 配置数据库；默认复用 pdl-log 配置")
+    parser.add_argument("--credentials", help="Jira 凭据文件；默认 data/jira_auth.json")
     parser.add_argument("--output", type=Path, default=project_path(CFG['jira']['output']))
     parser.add_argument("--dry-run", action="store_true", help="查询并预览，不写文件")
     args = parser.parse_args()
