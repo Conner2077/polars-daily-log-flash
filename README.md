@@ -7,6 +7,7 @@
 ├── config.toml          # 最小配置
 ├── config.example.toml
 ├── requirements.txt
+├── bootstrap.sh         # 一键初始化
 ├── setup.sh             # 创建 .venv 并安装依赖
 ├── prompts/             # 提示词
 │   ├── daily_report.md
@@ -82,13 +83,30 @@ Jira 项目固定为 `PLS`，工单号模式固定为 `PLS-\d+`，不需要配�
 
 ## 他人部署
 
-1. 准备 Python 3.11+ 和 Claude Code。
-2. 运行 `./setup.sh` 创建 `.venv` 并安装 `httpx`。
-3. `cp config.example.toml config.toml`，修改 `claude.settings` 和 `jira.label`。
-4. `./scripts/jira_login.sh` 配置 Jira 地址和凭据。
-5. 运行 `./scripts/check_setup.sh`。
-6. 用 `./scripts/update_tasks.sh --dry-run` 验证 Jira 查询。
-7. 先跑 `./scripts/run_daily.sh --no-submit`，确认日报后再去掉 `--no-submit`。
+```bash
+./bootstrap.sh   # 首次会生成 config.toml 后退出
+# 编辑 config.toml 的 claude.settings 和 jira.label
+./bootstrap.sh   # 创建 .venv、导入/配置 Jira、自检
+```
+
+`bootstrap.sh` 会：
+
+- 缺 `config.toml` 时从 `config.example.toml` 生成并提示编辑；
+- 缺 `.venv` 或 httpx 时运行 `setup.sh`；
+- 缺 Jira 凭据时，检测到 `~/.auto_daily_log/data.db` 会询问导入，否则进入 `jira_login`；
+- 创建 `data/` 和默认来源目录；
+- 最后运行 `check_setup.sh`。
+
+常用参数：
+
+```bash
+./bootstrap.sh --yes                  # 非交互；自动导入旧 pdl 配置
+./bootstrap.sh --from-pdl PATH        # 指定 pdl 的 data.db
+./bootstrap.sh --jira-server-url https://work.example.com \
+  --jira-auth-mode pat --jira-username your-name --jira-pat "xxxx" --test-jira
+```
+
+确认配置后，先跑 `./scripts/run_daily.sh --no-submit`，没问题再去掉 `--no-submit`。
 
 `wechat/` 是可选的企业微信工具（本地保留，不纳入仓库）；`tools/wechat-macos/` 记录了 macOS 密钥提取尝试，当前环境被 hardened runtime/SIP 阻塞，不影响主流程。
 
@@ -106,10 +124,9 @@ Jira 项目固定为 `PLS`，工单号模式固定为 `PLS-\d+`，不需要配�
 克隆后：
 
 ```bash
-./setup.sh
-cp config.example.toml config.toml
-./scripts/jira_login.sh
-./scripts/check_setup.sh   # 会自动创建 data/
+./bootstrap.sh   # 首次生成 config.toml 后退出
+# 编辑 config.toml
+./bootstrap.sh   # 安装依赖、配置 Jira、自检
 ```
 
 ## 采集 Agent 工作记录

@@ -37,6 +37,13 @@ def main():
     executable = shutil.which(command[0]) or (command[0] if Path(command[0]).is_file() else None)
     check(executable is not None, 'Claude 命令', command[0])
 
+    settings = CFG['claude'].get('settings')
+    if settings:
+        settings_path = project_path(settings)
+        check(settings_path.is_file(), 'Claude settings', str(settings_path))
+    else:
+        check(True, 'Claude settings', '未设置，使用 Claude 默认配置')
+
     data = ROOT / 'data'
     try:
         data.mkdir(parents=True, exist_ok=True)
