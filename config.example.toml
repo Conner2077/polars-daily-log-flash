@@ -13,9 +13,8 @@ settings = "~/path/to/cc_config/ds.json"
 # timeout_seconds = 600
 
 [jira]
-project = "ABC"
+# Jira 项目固定为 PLS，工单号模式固定为 PLS-\d+，无需配置
 label = "YourMainLabel"
-key_pattern = 'ABC-\d+'
 
 # 可选覆盖示例（都是新增的表，不会和上面重复）：
 # [report]

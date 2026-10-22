@@ -41,10 +41,10 @@ pdl_root = "~/path/to/auto_daily_log"
 settings = "~/path/to/ds.json"
 
 [jira]
-project = "ABC"
 label = "YourMainLabel"
-key_pattern = 'ABC-\d+'
 ```
+
+Jira 项目固定为 `PLS`，工单号模式固定为 `PLS-\d+`，不需要配置；只有标签（默认 `ConnerMain`）需要按人调整。
 
 其余默认值在 `scripts/project_config.py` 的 `DEFAULTS`：
 
@@ -62,7 +62,7 @@ Shell 入口统一经 `scripts/run_python.sh` 读取 `paths.pdl_python` 与 `pat
 ## 他人部署
 
 1. 准备 Python 3.11+（`tomllib`）、`auto_daily_log`（提供 `pdl-log` 和 Jira 客户端）以及 Claude Code。
-2. `cp config.example.toml config.toml`，修改 `paths.pdl_root`、`claude.settings`、`jira.project/label/key_pattern`。
+2. `cp config.example.toml config.toml`，修改 `paths.pdl_root`、`claude.settings`、`jira.label`。
 3. 确认 `scripts/*.sh` 有执行权限，运行 `./scripts/check_setup.sh`。
 4. 用 `./scripts/update_tasks.sh --dry-run` 验证 Jira 登录和查询。
 5. 先跑 `./scripts/run_daily.sh --no-submit`，确认日报后再去掉 `--no-submit`。
@@ -106,7 +106,7 @@ cp config.example.toml config.toml
 ./scripts/update_tasks.sh --dry-run
 ```
 
-从 Jira 查询 `jira.jql`，其中 `{project}` 和 `{label}` 会替换为 `jira.project` 与 `jira.label`（默认 `PLS` / `ConnerMain`），分页读取全部匹配工单，生成 `data/当前任务.md`。描述以引用块写入，避免任务描述里的标题或 `## PLS-xxx` 行被日报脚本误认为文档结构。保留状态与父任务关系，不额外按经办人或完成状态过滤。该步骤不调用 Claude；日报生成时再由 Claude 将任务要求与当天实际记录结合。
+从 Jira 查询 `jira.jql`，项目固定为 `PLS`，`{label}` 替换为 `jira.label`（默认 `ConnerMain`），分页读取全部匹配工单，生成 `data/当前任务.md`。描述以引用块写入，避免任务描述里的标题或 `## PLS-xxx` 行被日报脚本误认为文档结构。保留状态与父任务关系，不额外按经办人或完成状态过滤。该步骤不调用 Claude；日报生成时再由 Claude 将任务要求与当天实际记录结合。
 
 复用 `config.toml` 中 `paths` 指定的 pdl Python 环境和 Jira 客户端。默认服务配置与本机 `pdl-log` 一致，使用 `~/.polars-daily-log/config.yaml`；支持 `PDL_SERVER_CONFIG` 环境变量或 `--db /路径/data.db` 覆盖。数据库只读，查询完成后原子替换文档，失败时保留上一版。同步结果为空时明确写入“没有匹配标签的任务”。
 
