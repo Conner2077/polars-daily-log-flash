@@ -1,0 +1,28 @@
+# 复制为 config.toml 后只需改这三段。
+# 其余配置项都有默认值，一般不用改。
+
+[paths]
+pdl_root = "~/path/to/auto_daily_log"
+# pdl_python = "~/path/to/auto_daily_log/.venv/bin/python"
+# pdl_log = "~/.local/bin/pdl-log"
+# pdl_server_config = "~/.polars-daily-log/config.yaml"
+
+[claude]
+settings = "~/path/to/cc_config/ds.json"
+# bin = "claude"
+# timeout_seconds = 600
+
+[jira]
+project = "ABC"
+label = "YourMainLabel"
+key_pattern = 'ABC-\d+'
+
+# 可选覆盖示例（都是新增的表，不会和上面重复）：
+# [report]
+# max_body_chars = 200
+#
+# [submit]
+# pdl_log_timeout_seconds = 120
+#
+# [agents]
+# output_dir = "data/AI总结"

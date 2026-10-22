@@ -1,0 +1,15 @@
+# 运行数据：个人日志、日报、提交记录、当前任务
+data/
+
+# 本机配置（提交 config.example.toml 即可）
+config.toml
+
+# Python
+__pycache__/
+*.py[cod]
+
+# macOS
+.DS_Store
+
+# 可选的本地企业微信工具本体，不纳入主仓库
+wechat/
