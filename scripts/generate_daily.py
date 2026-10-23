@@ -164,13 +164,26 @@ def run(args):
     keys = task_keys(tasks)
     if not keys:
         raise ValueError(f'{task_file.name} 中没有可关联的 Jira 主任务')
-    result, envelope = run_claude(make_prompt(day, tasks, keys, sources))
-    result = re.sub(r'^```(?:json)?\s*\n(.*?)\n```$', r'\1', result, flags=re.S)
-    try:
-        report = validate_report(json.loads(result), keys, sources)
-    except (ValueError, KeyError, TypeError) as exc:
-        location = preserve_raw_output(day, envelope.get('result', ''))
-        raise ValueError(f'Claude 返回内容无效：{exc}；{location}') from exc
+    prompt = make_prompt(day, tasks, keys, sources)
+    limit = CFG['report']['max_body_chars']
+    last_raw = ''
+    for attempt in range(2):
+        result, envelope = run_claude(prompt)
+        last_raw = envelope.get('result', result)
+        result = re.sub(r'^```(?:json)?\s*\n(.*?)\n```$', r'\1', result, flags=re.S)
+        try:
+            report = validate_report(json.loads(result), keys, sources)
+            break
+        except (ValueError, KeyError, TypeError) as exc:
+            if '正文超过' in str(exc) and attempt == 0:
+                prompt += (f'\n\n上一次输出被脚本拒绝：{exc}。'
+                           f'请重新输出完整 JSON，逐条确认每个正文不超过 {limit} 个字；'
+                           '宁可少写一条，也不要超长。')
+                continue
+            location = preserve_raw_output(day, last_raw)
+            raise ValueError(f'Claude 返回内容无效：{exc}；{location}') from exc
+    else:
+        raise ValueError('Claude 两次返回的日报都未通过校验')
     content = render_report(day, report, sources)
     output = project_path(CFG['report']['output_dir']) / CFG['report']['file_name'].format(date=day)
     if args.dry_run:

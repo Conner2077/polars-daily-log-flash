@@ -26,7 +26,7 @@ set -e
 
 if (( code != 0 )); then
     echo "=== $(date '+%F %T') FAILED exit=$code ==="
-    echo "每日总结失败：$DAY，exit=$code，日志：$LOG" > "$LOG_DIR/last-failure.txt"
+    echo "每日总结失败：${DAY}，exit=${code}，日志：${LOG}" > "$LOG_DIR/last-failure.txt"
     "$ROOT/scripts/run_python.sh" notify_failure.py \
         --date "$DAY" --code "$code" --log "$LOG" || true
     exit "$code"
