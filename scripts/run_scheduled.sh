@@ -6,17 +6,25 @@ LOG_DIR="$ROOT/data/logs"
 mkdir -p "$LOG_DIR"
 umask 077
 
-if ! DAY="$("$ROOT/scripts/run_python.sh" today.py 2>>"$LOG_DIR/bootstrap.err")"; then
+if ! INFO="$("$ROOT/scripts/run_python.sh" schedule_info.py 2>>"$LOG_DIR/bootstrap.err")"; then
     echo "无法计算当天日期，详见 $LOG_DIR/bootstrap.err" >&2
+    exit 1
+fi
+eval "$INFO"
+if [[ -z "${DAY:-}" || -z "${SUBMIT:-}" ]]; then
+    echo "schedule_info 输出无效：$INFO" >&2
     exit 1
 fi
 LOG="$LOG_DIR/$DAY.log"
 exec >> "$LOG" 2>&1
 
-echo "=== $(date '+%F %T') scheduled run start (date=$DAY) ==="
+echo "=== $(date '+%F %T') scheduled run start (date=$DAY weekday=$WEEKDAY submit=$SUBMIT) ==="
 
 set +e
-if [[ "${SCHEDULED_NO_SUBMIT:-0}" == "1" ]]; then
+if [[ "${SCHEDULED_NO_SUBMIT:-0}" == "1" || "$SUBMIT" == "0" ]]; then
+    if [[ "$SUBMIT" == "0" ]]; then
+        echo "非提交日（周末），只生成日报，跳过 Jira 提交"
+    fi
     "$ROOT/scripts/run_daily.sh" --date "$DAY" --no-submit
 else
     "$ROOT/scripts/run_daily.sh" --date "$DAY"

@@ -227,6 +227,7 @@ AI 命令由 `config.toml` 的 `claude.bin`、`claude.settings` 和可选的 `cl
 
 - LaunchAgent：`~/Library/LaunchAgents/com.<user>.polars-daily-log.plist`
 - 执行入口：`scripts/run_scheduled.sh`
+- 默认周一至周五提交，**周六/周日只生成日报，不提交 Jira**；可通过 `[schedule].submit_weekdays` 调整（周一=0，周日=6）
 - 日志：`data/logs/YYYY-MM-DD.log`、`launchd.out.log`、`launchd.err.log`
 - 失败时：
   - 写 `data/logs/last-failure.txt`；

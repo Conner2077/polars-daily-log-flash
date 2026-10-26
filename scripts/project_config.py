@@ -60,6 +60,8 @@ DEFAULTS = {
     'schedule': {
         'hour': 21,
         'minute': 0,
+        # Monday=0 ... Sunday=6; weekends generate a report but skip submission.
+        'submit_weekdays': [0, 1, 2, 3, 4],
     },
     'notify': {
         'macos_notification': True,

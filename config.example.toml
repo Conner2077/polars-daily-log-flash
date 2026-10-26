@@ -21,6 +21,7 @@ label = "YourMainLabel"
 # [schedule]
 # hour = 21
 # minute = 0
+# submit_weekdays = [0, 1, 2, 3, 4]  # 周一=0；周末只生成日报，不提交
 #
 # [notify]
 # macos_notification = true
