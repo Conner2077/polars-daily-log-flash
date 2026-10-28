@@ -27,6 +27,7 @@
 │   ├── run_scheduled.sh
 │   ├── install_schedule.py/.sh
 │   ├── notify_failure.py
+│   ├── query_logs.py/.sh
 │   ├── run_python.sh
 │   ├── today.py
 │   ├── check_setup.py/.sh
@@ -213,6 +214,23 @@ AI 命令由 `config.toml` 的 `claude.bin`、`claude.settings` 和可选的 `cl
 它解析 `data/日报/YYYY-MM-DD-日报.md` 中每个 Jira 主任务的 `- 工时：` 行，对有效工时逐条调用 Jira REST API 写入 worklog，正文作为工时备注。工时记录在 `data/日报/YYYY-MM-DD-提交.json`；重跑时已提交的工单自动跳过。
 
 `未记录` 的任务不提交。网络异常等导致结果无法确认时记为 `unconfirmed`，重跑不会自动重试；请先到 Jira 核对，确认未写入后再加 `--retry-unconfirmed`。`--dry-run` 输出日报并列出将提交的工单，但不写日报、不写提交记录、不提交；`--no-submit` 只生成日报。
+
+## 查询近期工作日志
+
+```bash
+./scripts/query_logs.sh --days 7
+./scripts/query_logs.sh --date 2026-10-27
+./scripts/query_logs.sh --date 2026-10-27 --source agent
+./scripts/query_logs.sh --date 2026-10-27 --source log
+./scripts/query_logs.sh --search DuckDB --days 30
+./scripts/query_logs.sh --days 7 --json
+```
+
+- 默认列出最近 7 天的日报、Agent 记录、提交工时和定时状态；
+- `--date` 查看某天的完整日报，`--source` 可切到 Agent 记录/定时日志；
+- `--search` 在近期日报和 Agent 记录中搜索关键词，最多 50 条；
+- `--json` 供脚本/Agent 直接解析。
+- 数据来源是本地 `data/`；如果要查 Jira 服务端的 worklog，需要另外接 Jira 查询接口。
 
 ## 定时任务（macOS launchd）
 

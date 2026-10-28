@@ -81,6 +81,10 @@ data/                   # 运行数据，已被 git 忽略
 | Jira 登录状态 | `./scripts/jira_login.sh --status` |
 | 定时任务状态 | `./scripts/install_schedule.sh --status` |
 | 安装/卸载定时 | `./scripts/install_schedule.sh` / `--uninstall` |
+| 查最近 7 天 | `./scripts/query_logs.sh --days 7` |
+| 看某天日报 | `./scripts/query_logs.sh --date YYYY-MM-DD` |
+| 搜索工作内容 | `./scripts/query_logs.sh --search KEYWORD --days 30` |
+| 机器可读列表 | `./scripts/query_logs.sh --days 7 --json` |
 
 ## 定时任务
 
