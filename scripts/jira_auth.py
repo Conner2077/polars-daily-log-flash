@@ -128,6 +128,15 @@ class JiraClient:
                 'description': data['fields'].get('description', ''),
             }
 
+    async def get_worklog(self, issue_key: str, worklog_id: str) -> dict:
+        url = self._url(f'/rest/api/2/issue/{issue_key}/worklog/{worklog_id}')
+        async with httpx.AsyncClient(timeout=15.0, trust_env=False) as client:
+            response = await client.get(url, headers=self._headers())
+            if response.status_code >= 400:
+                raise Exception(f'Jira {response.status_code} on {issue_key}/worklog/{worklog_id}: '
+                                f'{response.text[:300]}')
+            return response.json()
+
     async def get_myself(self) -> Optional[dict]:
         try:
             url = self._url('/rest/api/2/myself')

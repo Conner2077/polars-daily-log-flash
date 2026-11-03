@@ -2,11 +2,13 @@
 from __future__ import annotations
 
 import argparse
+import asyncio
 import json
 import sys
 from datetime import date, timedelta
 from pathlib import Path
 
+import jira_auth
 from project_config import CFG, ROOT, project_path, today_iso
 
 
@@ -81,7 +83,58 @@ def list_days(days: int, end: str, as_json: bool):
     return 0
 
 
-def list_submissions(days: int, end: str, as_json: bool):
+def adf_text(value):
+    if isinstance(value, str):
+        return value
+    if isinstance(value, dict):
+        if value.get('type') == 'text':
+            return value.get('text', '')
+        return ''.join(adf_text(item) for item in value.get('content', []))
+    if isinstance(value, list):
+        return ''.join(adf_text(item) for item in value)
+    return ''
+
+
+def fill_local_comments(rows):
+    from submit_daily import parse_report
+
+    cache = {}
+    for row in rows:
+        if row.get('comment') and row.get('comment_source') != 'error':
+            continue
+        day = row['date']
+        if day not in cache:
+            report = paths_for(day)['report']
+            try:
+                cache[day] = ({item['key']: item['body'] for item in parse_report(report)}
+                              if report.is_file() else {})
+            except (OSError, ValueError):
+                cache[day] = {}
+        row['comment'] = cache[day].get(row['key'], '')
+        row['comment_source'] = 'local-report'
+
+
+async def fill_jira_comments(rows):
+    client = jira_auth.build_client()
+
+    async def fetch(row):
+        if not row.get('worklog_id'):
+            row['comment'] = '（没有 Jira worklog ID）'
+            row['comment_source'] = 'error'
+            return
+        try:
+            worklog = await client.get_worklog(row['key'], row['worklog_id'])
+            row['comment'] = adf_text(worklog.get('comment')) or str(worklog.get('comment') or '')
+            row['comment_source'] = 'jira'
+        except Exception as exc:
+            row['comment'] = f'（Jira 获取失败：{exc}）'
+            row['comment_source'] = 'error'
+
+    await asyncio.gather(*(fetch(row) for row in rows))
+
+
+def list_submissions(days: int, end: str, as_json: bool,
+                     with_content: bool = False, use_jira: bool = False):
     end_day = date.fromisoformat(end)
     rows = []
     for offset in range(days):
@@ -104,8 +157,22 @@ def list_submissions(days: int, end: str, as_json: bool):
                 'hours': seconds / 3600,
                 'worklog_id': item.get('worklog_id'),
                 'submitted_at': item.get('submitted_at'),
+                'comment': item.get('comment', ''),
+                'comment_source': 'state' if item.get('comment') else None,
             })
     rows.sort(key=lambda row: (row['date'], row['submitted_at'] or ''), reverse=True)
+
+    if use_jira and rows:
+        try:
+            asyncio.run(fill_jira_comments(rows))
+        except Exception as exc:
+            print(f'Jira 查询失败：{exc}', file=sys.stderr)
+            if with_content:
+                fill_local_comments(rows)
+            else:
+                return 1
+    elif with_content and rows:
+        fill_local_comments(rows)
 
     if as_json:
         print(json.dumps(rows, ensure_ascii=False, indent=2))
@@ -113,10 +180,17 @@ def list_submissions(days: int, end: str, as_json: bool):
     if not rows:
         print(f'最近 {days} 天没有已提交的工时')
         return 0
-    print('日期\t\t工单\t\t工时\tJira ID\t提交时间')
-    for row in rows:
-        print(f"{row['date']}\t{row['key']}\t{row['hours']:g} 小时\t"
-              f"{row['worklog_id'] or '-'}\t{row['submitted_at'] or '-'}")
+
+    if with_content or use_jira:
+        for row in rows:
+            print(f"{row['date']}  {row['key']}  {row['hours']:g} 小时  "
+                  f"Jira {row['worklog_id'] or '-'}  {row['submitted_at'] or '-'}")
+            print(f"  {row['comment'] or '（无正文）'}")
+    else:
+        print('日期\t\t工单\t\t工时\tJira ID\t提交时间')
+        for row in rows:
+            print(f"{row['date']}\t{row['key']}\t{row['hours']:g} 小时\t"
+                  f"{row['worklog_id'] or '-'}\t{row['submitted_at'] or '-'}")
     return 0
 
 
@@ -162,8 +236,12 @@ def main():
                         default='report', help='配合 --date 使用，默认 report')
     parser.add_argument('--search', metavar='KEYWORD', help='在最近日报和 Agent 记录中搜索')
     parser.add_argument('--submissions', action='store_true', help='列出最近的已提交工时')
+    parser.add_argument('--content', action='store_true', help='显示提交正文（本地日报）')
+    parser.add_argument('--jira', action='store_true', help='从 Jira 获取 worklog 实际备注')
     parser.add_argument('--json', action='store_true', help='列表输出 JSON')
     args = parser.parse_args()
+    if args.content or args.jira:
+        args.submissions = True
 
     try:
         if args.days <= 0 or args.days > 365:
@@ -175,7 +253,7 @@ def main():
             date.fromisoformat(args.date)
             return show_day(args.date, args.source)
         if args.submissions:
-            return list_submissions(args.days, args.end, args.json)
+            return list_submissions(args.days, args.end, args.json, args.content, args.jira)
         if args.search:
             return search(args.days, args.end, args.search)
         return list_days(args.days, args.end, args.json)

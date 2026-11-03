@@ -85,6 +85,8 @@ data/                   # 运行数据，已被 git 忽略
 | 看某天日报 | `./scripts/query_logs.sh --date YYYY-MM-DD` |
 | 搜索工作内容 | `./scripts/query_logs.sh --search KEYWORD --days 30` |
 | 最近已提交工时 | `./scripts/query_logs.sh --submissions --days 14` |
+| 提交正文（Jira） | `./scripts/query_logs.sh --submissions --jira --days 14` |
+| 提交正文（本地） | `./scripts/query_logs.sh --submissions --content --days 14` |
 | 机器可读列表 | `./scripts/query_logs.sh --days 7 --json` |
 
 ## 定时任务

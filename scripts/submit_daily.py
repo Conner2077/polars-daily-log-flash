@@ -22,7 +22,8 @@ def parse_report(path):
     pattern = CFG['jira']['key_pattern']
     text = path.read_text(encoding='utf-8')
     for key, section in re.findall(rf'^## ({pattern})\n(.*?)(?=^## |\Z)', text, re.M | re.S):
-        head = section.split('\n- 来源：', 1)[0]
+        head = (section.split('\n- 来源：', 1)[0]
+                .split('\n- Jira 主任务已分配工时合计：', 1)[0])
         match = re.search(r'^- 工时：(.+)$', head, re.M)
         if not match:
             raise ValueError(f'{key} 缺少工时行')
@@ -103,18 +104,18 @@ async def run(args):
         try:
             result = await client.submit_worklog(key, seconds, body, started)
         except httpx.RequestError as exc:
-            submissions[key] = {'seconds': seconds, 'status': 'unconfirmed',
+            submissions[key] = {'seconds': seconds, 'status': 'unconfirmed', 'comment': body,
                                 'error': str(exc)[-2000:], 'attempted_at': now}
             failures += 1
             print(f'结果未确认 {key}：{exc}', file=sys.stderr)
         except Exception as exc:
-            submissions[key] = {'seconds': seconds, 'status': 'failed',
+            submissions[key] = {'seconds': seconds, 'status': 'failed', 'comment': body,
                                 'error': str(exc)[-2000:], 'attempted_at': now}
             failures += 1
             print(f'提交失败 {key}：{exc}', file=sys.stderr)
         else:
             worklog_id = str(result.get('id') or '') or None
-            submissions[key] = {'seconds': seconds, 'status': 'submitted',
+            submissions[key] = {'seconds': seconds, 'status': 'submitted', 'comment': body,
                                 'worklog_id': worklog_id, 'submitted_at': now}
             print(f'已提交 {key} · {hours} 小时 · Jira ID {worklog_id or "未知"}')
         write_state(state_path, day, report, submissions)
