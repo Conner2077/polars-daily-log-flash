@@ -175,10 +175,10 @@ def run(args):
             report = validate_report(json.loads(result), keys, sources)
             break
         except (ValueError, KeyError, TypeError) as exc:
-            if '正文超过' in str(exc) and attempt == 0:
+            if attempt == 0:
                 prompt += (f'\n\n上一次输出被脚本拒绝：{exc}。'
-                           f'请重新输出完整 JSON，逐条确认每个正文不超过 {limit} 个字；'
-                           '宁可少写一条，也不要超长。')
+                           f'请重新输出完整 JSON，严格满足所有校验规则；'
+                           f'每个正文不超过 {limit} 字，sources 必须非空。')
                 continue
             location = preserve_raw_output(day, last_raw)
             raise ValueError(f'Claude 返回内容无效：{exc}；{location}') from exc

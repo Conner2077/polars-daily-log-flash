@@ -223,12 +223,15 @@ AI 命令由 `config.toml` 的 `claude.bin`、`claude.settings` 和可选的 `cl
 ./scripts/query_logs.sh --date 2026-10-27 --source agent
 ./scripts/query_logs.sh --date 2026-10-27 --source log
 ./scripts/query_logs.sh --search DuckDB --days 30
+./scripts/query_logs.sh --submissions --days 14
+./scripts/query_logs.sh --submissions --days 14 --json
 ./scripts/query_logs.sh --days 7 --json
 ```
 
 - 默认列出最近 7 天的日报、Agent 记录、提交工时和定时状态；
 - `--date` 查看某天的完整日报，`--source` 可切到 Agent 记录/定时日志；
 - `--search` 在近期日报和 Agent 记录中搜索关键词，最多 50 条；
+- `--submissions` 列出最近实际提交到 Jira 的工时，包含日期、工单、工时、Jira worklog ID 和提交时间；
 - `--json` 供脚本/Agent 直接解析。
 - 数据来源是本地 `data/`；如果要查 Jira 服务端的 worklog，需要另外接 Jira 查询接口。
 
