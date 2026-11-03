@@ -14,6 +14,9 @@ label = "YourMainLabel"
 # 可选覆盖示例：
 # [report]
 # max_body_chars = 200
+# measured_time_factor = 1.2
+# max_daily_seconds = 36000
+# allocate_only_recorded = true
 #
 # [agents]
 # output_dir = "data/AI总结"

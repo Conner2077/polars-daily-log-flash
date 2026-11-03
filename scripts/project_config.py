@@ -52,6 +52,11 @@ DEFAULTS = {
         'default_daily_seconds': 28800,
         'max_task_seconds': 86400,
         'max_body_chars': 200,
+        # Measured agent-session time is deduplicated and multiplied by this factor.
+        'measured_time_factor': 1.2,
+        'max_daily_seconds': 36000,
+        # Only tasks with a real body and sources receive the measured/default hours.
+        'allocate_only_recorded': True,
     },
     'submit': {
         'state_file_name': '{date}-提交.json',
@@ -70,6 +75,7 @@ DEFAULTS = {
     'agents': {
         'output_dir': 'data/AI总结',
         'file_name': '{date}-Agent.md',
+        'sidecar_file_name': '{date}-Agent.json',
         'providers': [
             {
                 'id': 'claude-code',

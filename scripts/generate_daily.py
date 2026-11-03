@@ -7,7 +7,7 @@ import os
 import re
 import subprocess
 import sys
-from datetime import date
+from datetime import date, datetime
 
 from project_config import (CFG, SCRIPT_DIR, project_path, render_prompt,
                             run_claude, today_iso, write_atomic)
@@ -81,7 +81,38 @@ def validate_item(item, sources, allow_empty, limit, label='条目'):
             raise ValueError('工时时间证据与来源原文不符')
 
 
-def validate_report(report, keys, sources):
+def measured_session_seconds(day):
+    agents = CFG['agents']
+    path = project_path(agents['output_dir']) / agents['sidecar_file_name'].format(date=day)
+    if not path.is_file():
+        return 0
+    try:
+        data = json.loads(path.read_text(encoding='utf-8'))
+    except (OSError, json.JSONDecodeError):
+        return 0
+    intervals = []
+    for session in data.get('sessions') or []:
+        try:
+            start = datetime.fromisoformat(session['start'])
+            end = datetime.fromisoformat(session['end'])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if end > start:
+            intervals.append((start, end))
+    if not intervals:
+        return 0
+    intervals.sort()
+    merged = []
+    for start, end in intervals:
+        if merged and start <= merged[-1][1]:
+            if end > merged[-1][1]:
+                merged[-1] = (merged[-1][0], end)
+        else:
+            merged.append((start, end))
+    return int(sum((end - start).total_seconds() for start, end in merged))
+
+
+def validate_report(report, keys, sources, measured_seconds=0, target_seconds=0):
     if not isinstance(report, dict) or not isinstance(report.get('tasks'), list):
         raise ValueError('Claude 返回结构无效')
     tasks = report['tasks']
@@ -98,12 +129,32 @@ def validate_report(report, keys, sources):
     validate_item(unmatched, sources, allow_empty=True, limit=limit, label='未归属工作')
     explicit = any(item.get('seconds') is not None for item in [*tasks, unmatched])
     if not explicit:
-        total_default = CFG['report']['default_daily_seconds']
-        seconds, remainder = divmod(total_default, len(keys))
-        for i, item in enumerate(tasks):
-            item['allocated_seconds'] = seconds + (i < remainder)
-        report['hours_mode'] = (f'无工时记录：总计 {total_default / 3600:g} 小时按 Jira 主任务平均分配'
-                                '（余秒依任务顺序分配）')
+        report_cfg = CFG['report']
+        target = target_seconds if measured_seconds else report_cfg['default_daily_seconds']
+        only_recorded = report_cfg.get('allocate_only_recorded', True)
+        eligible = tasks
+        if only_recorded:
+            eligible = [item for item in tasks
+                        if item.get('body', '').strip() != '当天记录未体现此任务的实际进展'
+                        and item.get('sources')]
+        for item in tasks:
+            item['allocated_seconds'] = None
+        if eligible:
+            seconds, remainder = divmod(target, len(eligible))
+            for i, item in enumerate(eligible):
+                item['allocated_seconds'] = seconds + (i < remainder)
+            scope = '仅分配给有记录的主任务' if only_recorded else '按 Jira 主任务平均分配'
+            if measured_seconds:
+                factor = report_cfg.get('measured_time_factor', 1.2)
+                cap = report_cfg.get('max_daily_seconds', 36000)
+                report['hours_mode'] = (
+                    f'实测会话 {measured_seconds / 3600:.2f} 小时 × {factor:g} = '
+                    f'{target / 3600:g} 小时（上限 {cap / 3600:g} 小时）；{scope}')
+            else:
+                report['hours_mode'] = (
+                    f'无实测会话记录，按默认 {report_cfg["default_daily_seconds"] / 3600:g} 小时；{scope}')
+        else:
+            report['hours_mode'] = '没有有实际记录的主任务，未分配工时'
     else:
         for item in tasks:
             item['allocated_seconds'] = item.get('seconds')
@@ -165,14 +216,21 @@ def run(args):
     if not keys:
         raise ValueError(f'{task_file.name} 中没有可关联的 Jira 主任务')
     prompt = make_prompt(day, tasks, keys, sources)
-    limit = CFG['report']['max_body_chars']
+    report_cfg = CFG['report']
+    measured = measured_session_seconds(day)
+    target = 0
+    if measured:
+        target = min(round(measured * float(report_cfg.get('measured_time_factor', 1.2))),
+                     int(report_cfg.get('max_daily_seconds', 36000)))
+    limit = report_cfg['max_body_chars']
     last_raw = ''
     for attempt in range(2):
         result, envelope = run_claude(prompt)
         last_raw = envelope.get('result', result)
         result = re.sub(r'^```(?:json)?\s*\n(.*?)\n```$', r'\1', result, flags=re.S)
         try:
-            report = validate_report(json.loads(result), keys, sources)
+            report = validate_report(json.loads(result), keys, sources,
+                                     measured_seconds=measured, target_seconds=target)
             break
         except (ValueError, KeyError, TypeError) as exc:
             if attempt == 0:

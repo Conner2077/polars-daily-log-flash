@@ -344,6 +344,15 @@ def run(args):
         return 0
     if args.show_digest:
         print(json.dumps(sessions, ensure_ascii=False, indent=2))
+    sidecar = project_path(agents['output_dir']) / agents['sidecar_file_name'].format(date=day.isoformat())
+    write_atomic(sidecar, json.dumps({
+        'date': day.isoformat(),
+        'sessions': [
+            {'agent': item['agent'], 'cwd': item['cwd'], 'session': item['session'],
+             'start': item['start'], 'end': item['end']}
+            for item in sessions
+        ],
+    }, ensure_ascii=False, indent=2) + '\n')
     body, _ = run_claude(make_prompt(day.isoformat(), sessions))
     body = strip_fence(body)
     if not body.strip():
